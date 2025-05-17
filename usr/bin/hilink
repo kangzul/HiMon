@@ -429,13 +429,10 @@ unlock() {
 }
 update() {
     clear
-    echo -e "---------------------------"
-    echo -e "Updating..."
     rm -f "$DIR/m"
     rm -f "$DIR/hilink"
     download_file "$DIR/m" "$GITHUB/usr/bin/m"
     download_file "$DIR/hilink" "$GITHUB/usr/bin/hilink"
-    echo -e "Finish Updating..."
     sleep 2
 }
 download_file() {

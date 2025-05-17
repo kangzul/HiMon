@@ -123,7 +123,7 @@ case $opt in
     sleep 3
     clear
     echo -e
-    echo -e Done.....
+    echo -e Finish Updating.....
     echo -e
     read -n 1 -s -r -p "Press any key to back on menu"
     /usr/bin/m
