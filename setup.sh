@@ -44,9 +44,9 @@ download_files() {
     echo ""
     download_file "$DIR/m" "$GITHUB/usr/bin/m"
     download_file "$DIR/hilink" "$GITHUB/usr/bin/hilink"
+    download_file "$DIR/himon" "$GITHUB/usr/bin/himon"
     download_file "$DIR/balong-nvtool" "$GITHUB/usr/bin/balong-nvtool"
     download_file "$CONFIG/hilink" "$GITHUB/hilink"
-    download_file "$DIR/himon" "$GITHUB/himon"
     download_file "$CONTROLLER/hilink.lua" "$GITHUB/controller/hilink.lua"
     download_file "$MODEL/hilink.lua" "$GITHUB/cbi/hilink.lua"
     finish

@@ -3,6 +3,6 @@ config hilink 'settings'
 	option router_ip '192.168.8.1'
 	option username 'admin'
 	option password 'admin'
-	option lan_off_duration '30'
+	option lan_off_duration '15'
 	option modem_path 'hilink iphunter'
 

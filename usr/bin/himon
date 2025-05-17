@@ -30,7 +30,7 @@ function loop() {
     log "Monitoring LAN status..."
     lan_off_timer=0
     while true; do
-        if curl -X "HEAD" --connect-timeout 3 -so /dev/null "http://bing.com"; then
+        if curl -I --connect-timeout 3 -s http://connectivitycheck.gstatic.com/generate_204 >/dev/null 2>&1; then
             if [ "$lan_off_timer" -ne 0 ]; then
                 log "Internet kembali normal."
             fi
