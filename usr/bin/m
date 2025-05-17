@@ -148,7 +148,10 @@ case $opt in
     read -n 1 -s -r -p "Press any key to back"
     ;;
 
-x) exit ;;
+x)
+    clear
+    exit
+    ;;
 *)
     echo "Anda salah tekan "
     sleep 1
