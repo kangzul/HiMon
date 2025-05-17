@@ -483,6 +483,10 @@ case $1 in
     unlock
     exit
     ;;
+"update")
+    update
+    exit
+    ;;
 esac
 echo -e "\e[38;3m modem iphunter\e[0m \e[34;1m(IP Hunter)\e[0m"
 echo -e "\e[38;3m modem info\e[0m \e[34;1m(Device Information)\e[0m"
