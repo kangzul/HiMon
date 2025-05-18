@@ -6,7 +6,7 @@ clear
 hostname=$(ubus call system board | jsonfilter -e '@.hostname')
 
 DIR=/usr/bin
-GITHUB=https://raw.githubusercontent.com/kangzul/Hilink/main
+GITHUB=https://raw.githubusercontent.com/kangzul/HiMon/main
 MAX_RETRIES=3
 
 # Start Helper Functions
