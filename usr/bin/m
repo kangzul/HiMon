@@ -57,8 +57,7 @@ case $opt in
 1)
     clear
     echo -e Proses ubah ip, mohon ditunggu
-    echo -e
-    sleep 3
+    sleep 1
     clear
     hilink iphunter
     echo -e
@@ -69,8 +68,7 @@ case $opt in
 2)
     clear
     echo -e Proses cek info modem, mohon ditunggu
-    echo -e
-    sleep 3
+    sleep 1
     clear
     hilink info
     echo -e
@@ -81,8 +79,7 @@ case $opt in
 3)
     clear
     echo -e Proses lock cell id, mohon ditunggu
-    echo -e
-    sleep 3
+    sleep 1
     clear
     hilink lock
     echo -e
@@ -93,7 +90,6 @@ case $opt in
 4)
     clear
     echo -e Proses unlock cell id, mohon ditunggu......
-    echo -e
     hilink unlock
     echo -e
     read -n 1 -s -r -p "Press any key to back on menu"
@@ -103,9 +99,8 @@ case $opt in
 5)
     clear
     echo -e Proses reboot, mohon ditunggu......
-    echo -e
     hilink reboot
-    sleep 3
+    sleep 1
     clear
     echo -e
     echo -e Done.....
@@ -117,10 +112,8 @@ case $opt in
 6)
     clear
     echo -e Proses Update Script berjalan, mohon ditunggu......
-    sleep 1
-    echo -e
     hilink update
-    sleep 3
+    sleep 1
     clear
     echo -e
     echo -e Finish Updating.....
@@ -132,7 +125,6 @@ case $opt in
 7)
     clear
     echo -e Proses Uninstall Hilink berjalan, mohon ditunggu......
-    sleep 3
     echo -e
     rm -f $DIR/m
     rm -f $DIR/hilink
