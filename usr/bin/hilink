@@ -3,19 +3,25 @@
 # Optimized by kangzul
 
 clear
-hostname=$(ubus call system board | jsonfilter -e '@.hostname')
 
 DIR=/usr/bin
 GITHUB=https://raw.githubusercontent.com/kangzul/HiMon/main
 MAX_RETRIES=3
 
 # Start Helper Functions
-curl_request() {
-    local url="http://$ipmodem/api/$1"
+auth() {
+    local data=$(request "webserver/SesTokInfo")
+    cookie=$(grep -o "SessionID=.*" <<<"$data" | cut -b 10-147)
+    token=$(grep -o "<TokInfo>.*</TokInfo>" <<<"$data" | cut -b 10-41)
+}
+
+request() {
+    local endpoint=$1
     local method=${2:-GET}
     local data=${3:-}
-    local cookie=${4:-}
-    local token=${5:-}
+    local url="http://$ipmodem/api/$endpoint"
+
+    [[ "$endpoint" != "webserver/SesTokInfo" ]] && auth
 
     local headers=(
         -H "Host: $ipmodem"
@@ -26,17 +32,15 @@ curl_request() {
         -H "Referer: http://$ipmodem/html/home.html"
         -H "Accept-Encoding: gzib, deflate"
         -H "Accept-Language: id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7"
+        -H "Cookie: $cookie"
     )
 
-    # Tambahkan cookie jika ada
-    [[ -n $cookie ]] && headers+=(-H "Cookie: $cookie")
-    [[ -n $token ]] && headers+=(-H "__RequestVerificationToken: $token")
-
     if [[ "$method" == "POST" ]]; then
-        headers+=(-H "Content-Type: application/x-www-form-urlencoded; charset=UTF-8")
+        headers+=(
+            -H "Content-Type: application/x-www-form-urlencoded; charset=UTF-8"
+            -H "__RequestVerificationToken: $token"
+        )
         curl -s -X POST "$url" "${headers[@]}" -d "$data"
-    elif [[ "$method" == "HEAD" ]]; then
-        curl -s -D- -o /dev/null "$url" "${headers[@]}"
     else
         curl -s "$url" "${headers[@]}"
     fi
@@ -78,24 +82,22 @@ to_hex8() {
     printf "%08s" "$hex" | tr ' ' '0'
 }
 
-get_sesi_token() {
-    data=$(curl_request "webserver/SesTokInfo")
-    sesi=$(echo "$data" | grep "SessionID=" | cut -b 10-147)
-    token=$(echo "$data" | grep "TokInfo" | cut -b 10-41)
-}
-
 download_file() {
     local dest=$1
     local src=$2
     local retries=0
+    local temp="${dest}_temp"
 
     while [ $retries -lt $MAX_RETRIES ]; do
-        wget -O "$dest" "$src"
-        if [ $? -eq 0 ] && [ -s "$dest" ]; then
+        wget -O "$temp" "$src"
+        if [ $? -eq 0 ] && [ -s "$temp" ]; then
+            rm -f "$dest"
+            mv "$temp" "$dest"
             chmod +x "$dest"
             return 0
         fi
         echo "Download failed $src, try again... ($((retries + 1))/$MAX_RETRIES)"
+        rm -f "$temp"
         retries=$((retries + 1))
         sleep 2
     done
@@ -111,10 +113,10 @@ ipmod() {
 }
 
 login() {
+    ipmod
     pass=$(uci get hilink.settings.password)
-    get_sesi_token
 
-    check=$(curl_request "user/state-login" "GET" "" "$sesi")
+    check=$(request "user/state-login")
     state=$(echo $check | awk -F "<State>" '{print $2}' | awk -F "</State>" '{print $1}')
     type=$(echo $check | awk -F "<password_type>" '{print $2}' | awk -F "</password_type>" '{print $1}')
     if [ $state = "0" ]; then
@@ -128,7 +130,7 @@ login() {
             pass1=$(echo -n "$pass" | base64 -w 0)
             pass1=$(echo -n "$pass1</Password>")
         fi
-        login=$(curl_request "user/login" "POST" '<?xml version="1.0" encoding="UTF-8"?><request><Username>admin</Username><Password>'$pass1'</Password></request>' "$sesi" "$token")
+        login=$(request "user/login" "POST" '<?xml version="1.0" encoding="UTF-8"?><request><Username>admin</Username><Password>'$pass1'</Password></request>')
         scoki=$(echo "$login" | grep [Ss]et-[Cc]ookie | cut -d':' -f2 | cut -b 1-138)
         if [ $scoki ]; then
             echo -e "Login Success"
@@ -141,20 +143,18 @@ login() {
 
 info() {
     clear
-    ipmod $1
     login
-    get_sesi_token
 
     echo -e "---------------------------"
-    oper=$(curl_request "net/current-plmn" "GET" "" "$sesi")
+    oper=$(request "net/current-plmn")
     operator=$(echo $oper | awk -F "<FullName>" '{print $2}' | awk -F "</FullName>" '{print $1}')
     echo -e "Operator : $operator"
 
-    ip=$(curl_request "device/information" "GET" "" "$sesi")
+    ip=$(request "device/information")
     tp=$(echo $ip | awk -F "<DeviceName>" '{print $2}' | awk -F "</DeviceName>" '{print $1}')
     echo -e "Device : $tp"
 
-    dns=$(curl_request "monitoring/status" "GET" "" "$sesi")
+    dns=$(request "monitoring/status")
     ipp=$(echo $dns | awk -F "<WanIPAddress>" '{print $2}' | awk -F "</WanIPAddress>" '{print $1}')
     dns1=$(echo $dns | awk -F "<PrimaryDns>" '{print $2}' | awk -F "</PrimaryDns>" '{print $1}')
     dns2=$(echo $dns | awk -F "<SecondaryDns>" '{print $2}' | awk -F "</SecondaryDns>" '{print $1}')
@@ -165,13 +165,13 @@ info() {
     echo -ne "Network : "
     network $net
 
-    td=$(curl_request "monitoring/traffic-statistics" "GET" "" "$sesi")
+    td=$(request "monitoring/traffic-statistics")
     tup=$(echo $td | awk -F "<TotalUpload>" '{print $2}' | awk -F "</TotalUpload>" '{print $1}' | human_print)
     tdd=$(echo $td | awk -F "<TotalDownload>" '{print $2}' | awk -F "</TotalDownload>" '{print $1}' | human_print)
     echo -e "Total Upload : $tup"
     echo -e "Total Download : $tdd"
 
-    dvi=$(curl_request "device/signal" "GET" "" "$sesi")
+    dvi=$(request "device/signal")
     pci=$(echo $dvi | awk -F "<pci>" '{print $2}' | awk -F "</pci>" '{print $1}')
     cellid=$(echo $dvi | awk -F "<cell_id>" '{print $2}' | awk -F "</cell_id>" '{print $1}')
     echo -e "PCI : $pci"
@@ -181,16 +181,13 @@ info() {
 
 iphunter() {
     clear
-    ipmod
     login
-    get_sesi_token
 
-    dns=$(curl_request "monitoring/status" "GET" "" "$sesi")
+    dns=$(request "monitoring/status")
     previpp=$(echo $dns | awk -F "<WanIPAddress>" '{print $2}' | awk -F "</WanIPAddress>" '{print $1}')
     echo -e "---------------------------"
 
-    # Cek Status Jaringan
-    grs=$(curl_request "net/net-mode" "GET" "" "$sesi")
+    grs=$(request "net/net-mode")
     srg=$(echo $grs | awk -F "<NetworkMode>" '{print $2}' | awk -F "</NetworkMode>" '{print $1}')
     echo -n "Previous Service : "
     service $srg
@@ -198,43 +195,41 @@ iphunter() {
     case $srg in
     "00")
 
-        set4g=$(curl_request "net/net-mode" "POST" '<?xml version="1.0" encoding="UTF-8"?><response><NetworkMode>03</NetworkMode><NetworkBand>3FFFFFFF</NetworkBand><LTEBand>7FFFFFFFFFFFFFFF</LTEBand></response>' "$sesi" "$token")
+        set4g=$(request "net/net-mode" "POST" '<?xml version="1.0" encoding="UTF-8"?><response><NetworkMode>03</NetworkMode><NetworkBand>3FFFFFFF</NetworkBand><LTEBand>7FFFFFFFFFFFFFFF</LTEBand></response>')
         res=$(echo $set4g | awk -F "<response>" '{print $2}' | awk -F "</response>" '{print $1}')
         echo "Set 4G Only : $res"
         sleep 2
         ;;
     "03")
 
-        setauto=$(curl_request "net/net-mode" "POST" '<?xml version="1.0" encoding="UTF-8"?><response><NetworkMode>00</NetworkMode><NetworkBand>3FFFFFFF</NetworkBand><LTEBand>7FFFFFFFFFFFFFFF</LTEBand></response>' "$sesi" "$token")
+        setauto=$(request "net/net-mode" "POST" '<?xml version="1.0" encoding="UTF-8"?><response><NetworkMode>00</NetworkMode><NetworkBand>3FFFFFFF</NetworkBand><LTEBand>7FFFFFFFFFFFFFFF</LTEBand></response>')
         res=$(echo $setauto | awk -F "<response>" '{print $2}' | awk -F "</response>" '{print $1}')
         echo -e "Set Auto : $res"
-        sleep 2
+        sleep 3
 
-        get_sesi_token
-
-        set4g=$(curl_request "net/net-mode" "POST" '<?xml version="1.0" encoding="UTF-8"?><response><NetworkMode>03</NetworkMode><NetworkBand>3FFFFFFF</NetworkBand><LTEBand>7FFFFFFFFFFFFFFF</LTEBand></response>' "$sesi" "$token")
+        set4g=$(request "net/net-mode" "POST" '<?xml version="1.0" encoding="UTF-8"?><response><NetworkMode>03</NetworkMode><NetworkBand>3FFFFFFF</NetworkBand><LTEBand>7FFFFFFFFFFFFFFF</LTEBand></response>')
         res=$(echo $set4g | awk -F "<response>" '{print $2}' | awk -F "</response>" '{print $1}')
         echo "Set 4G Only : $res"
         sleep 2
         ;;
     esac
 
-    grs=$(curl_request "net/net-mode" "GET" "" "$sesi")
+    grs=$(request "net/net-mode")
     srg=$(echo $grs | awk -F "<NetworkMode>" '{print $2}' | awk -F "</NetworkMode>" '{print $1}')
     echo -n "Current Service : "
     service $srg
-    sleep 1
     echo -e "---------------------------"
+    sleep 1
 
-    oper=$(curl_request "net/current-plmn" "GET" "" "$sesi")
+    oper=$(request "net/current-plmn")
     operator=$(echo $oper | awk -F "<FullName>" '{print $2}' | awk -F "</FullName>" '{print $1}')
     echo -e "Operator : $operator"
 
-    ip=$(curl_request "device/information" "GET" "" "$sesi")
+    ip=$(request "device/information")
     tp=$(echo $ip | awk -F "<DeviceName>" '{print $2}' | awk -F "</DeviceName>" '{print $1}')
     sleep 2
 
-    dns2=$(curl_request "monitoring/status" "GET" "" "$sesi")
+    dns2=$(request "monitoring/status")
     ipp=$(echo $dns2 | awk -F "<WanIPAddress>" '{print $2}' | awk -F "</WanIPAddress>" '{print $1}')
     echo -e "Device : $tp"
     echo -e "Wan IP (Before) : $previpp"
@@ -245,13 +240,10 @@ iphunter() {
 
 restart() {
     clear
-    ipmod
     login
     clear
-    # cookie
-    get_sesi_token
-    # restart modem
-    res=$(curl_request "device/control" "POST" '<?xml version="1.0" encoding="UTF-8"?><request><Control>1</Control></request>' "$sesi" "$token")
+
+    res=$(request "device/control" "POST" '<?xml version="1.0" encoding="UTF-8"?><request><Control>1</Control></request>')
     ress=$(echo $res | awk -F "<response>" '{print $2}' | awk -F "</response>" '{print $1}')
     if [ "$ress" = "OK" ]; then
         echo -e "Rebooting..."
@@ -360,9 +352,6 @@ unlock() {
 
 update() {
     clear
-    rm -f "$DIR/m"
-    rm -f "$DIR/hilink"
-    rm -f "$DIR/himon"
     download_file "$DIR/m" "$GITHUB/usr/bin/m"
     download_file "$DIR/hilink" "$GITHUB/usr/bin/hilink"
     download_file "$DIR/himon" "$GITHUB/usr/bin/himon"
@@ -403,8 +392,3 @@ case $1 in
     exit
     ;;
 esac
-echo -e "\e[38;3m modem iphunter\e[0m \e[34;1m(IP Hunter)\e[0m"
-echo -e "\e[38;3m modem info\e[0m \e[34;1m(Device Information)\e[0m"
-echo -e "\e[38;3m modem reboot\e[0m \e[34;1m(Restart Modem)\e[0m"
-echo -e "\e[38;3m modem lock\e[0m \e[34;1m(Lock Cell ID)\e[0m"
-echo -e "\e[38;3m modem unlock\e[0m \e[34;1m(Unlock Cell ID)\e[0m"
