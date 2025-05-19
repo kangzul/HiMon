@@ -4,36 +4,41 @@
 
 clear
 
-DIR=/usr/bin
-GITHUB=https://raw.githubusercontent.com/kangzul/HiMon/main
-MAX_RETRIES=3
+dir=/usr/bin
+github=https://raw.githubusercontent.com/kangzul/HiMon/main
+max_retries=3
+ip_modem=$(uci get hilink.settings.router_ip)
+pass_modem=$(uci get hilink.settings.password)
 
 # Start Helper Functions
 auth() {
     local data=$(request "webserver/SesTokInfo")
-    cookie=$(grep -o "SessionID=.*" <<<"$data" | cut -b 10-147)
-    token=$(grep -o "<TokInfo>.*</TokInfo>" <<<"$data" | cut -b 10-41)
+    cookie=$(echo "$data" | grep "SessionID=" | cut -b 10-147)
+    token=$(echo "$data" | grep "TokInfo" | cut -b 10-41)
 }
 
 request() {
     local endpoint=$1
-    local method=${2:-GET}
+    local method=${2:-}
     local data=${3:-}
-    local url="http://$ipmodem/api/$endpoint"
+    local url="http://$ip_modem/api/$endpoint"
 
     [[ "$endpoint" != "webserver/SesTokInfo" ]] && auth
 
     local headers=(
-        -H "Host: $ipmodem"
+        -H "Host: $ip_modem"
         -H "Connection: keep-alive"
         -H "Accept: */*"
         -H "X-Requested-With: XMLHttpRequest"
         -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.119 Safari/537.36"
-        -H "Referer: http://$ipmodem/html/home.html"
+        -H "Referer: http://$ip_modem/html/home.html"
         -H "Accept-Encoding: gzib, deflate"
         -H "Accept-Language: id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7"
-        -H "Cookie: $cookie"
     )
+
+    if [[ "$endpoint" != "webserver/SesTokInfo" ]]; then
+        headers+=(-H "Cookie: $cookie")
+    fi
 
     if [[ "$method" == "POST" ]]; then
         headers+=(
@@ -88,7 +93,7 @@ download_file() {
     local retries=0
     local temp="${dest}_temp"
 
-    while [ $retries -lt $MAX_RETRIES ]; do
+    while [ $retries -lt $max_retries ]; do
         wget -O "$temp" "$src"
         if [ $? -eq 0 ] && [ -s "$temp" ]; then
             rm -f "$dest"
@@ -96,25 +101,19 @@ download_file() {
             chmod +x "$dest"
             return 0
         fi
-        echo "Download failed $src, try again... ($((retries + 1))/$MAX_RETRIES)"
+        echo "Download failed $src, try again... ($((retries + 1))/$max_retries)"
         rm -f "$temp"
         retries=$((retries + 1))
         sleep 2
     done
 
-    echo "Download failed $src after $MAX_RETRIES trying. Stop Installation..."
+    echo "Download failed $src after $max_retries trying. Stop Installation..."
     exit 1
 }
 # End Helper Functions
 
-ipmod() {
-    ipmodem=$(uci get hilink.settings.router_ip)
-    echo -e "IP Address Modem Anda ${ipmodem}"
-}
-
 login() {
-    ipmod
-    pass=$(uci get hilink.settings.password)
+    clear
 
     check=$(request "user/state-login")
     state=$(echo $check | awk -F "<State>" '{print $2}' | awk -F "</State>" '{print $1}')
@@ -123,11 +122,11 @@ login() {
         echo "Activated Successfully"
     else
         if [ $type = "4" ]; then
-            pass1=$(echo -n "$pass" | sha256sum | head -c 64 | base64 -w 0)
+            pass1=$(echo -n "$pass_modem" | sha256sum | head -c 64 | base64 -w 0)
             pass1=$(echo -n "admin$pass1$token" | sha256sum | head -c 64 | base64 -w 0)
             pass1=$(echo -n "$pass1</Password><password_type>4</password_type>")
         else
-            pass1=$(echo -n "$pass" | base64 -w 0)
+            pass1=$(echo -n "$pass_modem" | base64 -w 0)
             pass1=$(echo -n "$pass1</Password>")
         fi
         login=$(request "user/login" "POST" '<?xml version="1.0" encoding="UTF-8"?><request><Username>admin</Username><Password>'$pass1'</Password></request>')
@@ -142,7 +141,6 @@ login() {
 }
 
 info() {
-    clear
     login
 
     echo -e "---------------------------"
@@ -180,7 +178,6 @@ info() {
 }
 
 iphunter() {
-    clear
     login
 
     dns=$(request "monitoring/status")
@@ -239,7 +236,6 @@ iphunter() {
 }
 
 restart() {
-    clear
     login
     clear
 
@@ -254,18 +250,16 @@ restart() {
 
 lock() {
     clear
-    ipmod
-    clear
     echo -e "---------------------------"
-    echo -e "Connecting to $ipmodem"
+    echo -e "Connecting to $ip_modem"
     sleep 1
 
     adb kill-server >/dev/null 2>&1
-    adb connect "$ipmodem" >/dev/null 2>&1
+    adb connect "$ip_modem" >/dev/null 2>&1
     sleep 2
 
-    local cek=$(adb devices -l | grep "$ipmodem:5555" | awk -F ":" '{print $1}')
-    if [ "$cek" = "$ipmodem" ]; then
+    local cek=$(adb devices -l | grep "$ip_modem:5555" | awk -F ":" '{print $1}')
+    if [ "$cek" = "$ip_modem" ]; then
         echo -e "Device connected!"
         sleep 1
     else
@@ -310,18 +304,16 @@ lock() {
 
 unlock() {
     clear
-    ipmod
-    clear
     echo -e "---------------------------"
-    echo -e "Connecting to $ipmodem"
+    echo -e "Connecting to $ip_modem"
     sleep 2
 
     adb kill-server >/dev/null 2>&1
-    adb connect "$ipmodem" >/dev/null 2>&1
+    adb connect "$ip_modem" >/dev/null 2>&1
     sleep 2
 
-    local cek=$(adb devices -l | grep "$ipmodem:5555" | awk -F ":" '{print $1}')
-    if [ "$cek" = "$ipmodem" ]; then
+    local cek=$(adb devices -l | grep "$ip_modem:5555" | awk -F ":" '{print $1}')
+    if [ "$cek" = "$ip_modem" ]; then
         echo -e "Device connected!"
         sleep 2
     else
@@ -352,9 +344,9 @@ unlock() {
 
 update() {
     clear
-    download_file "$DIR/m" "$GITHUB/usr/bin/m"
-    download_file "$DIR/hilink" "$GITHUB/usr/bin/hilink"
-    download_file "$DIR/himon" "$GITHUB/usr/bin/himon"
+    download_file "$dir/m" "$github/usr/bin/m"
+    download_file "$dir/hilink" "$github/usr/bin/hilink"
+    download_file "$dir/himon" "$github/usr/bin/himon"
     sleep 2
 }
 
@@ -366,6 +358,7 @@ if [ -f $(opkg list-installed | grep screen | awk '{print $1}') ]; then
     opkg update && opkg install screen
     clear
 fi
+
 case $1 in
 "info")
     info $2
