@@ -1,87 +1,40 @@
-#!/bin/bash
+#!/bin/sh
 # Internet Monitor for Hilink
 # Script ini memonitor koneksi internet dan mengganti IP modem jika koneksi terputus
 # Optimized by kangzul
 
 LOG_FILE="/var/log/hilink_monitor.log"
-SERVICE_NAME="Hilink Monitor"
-CONFIG_FILE="/etc/config/hilink"
 DEFAULT_CHECK_INTERVAL=1
+LAN_OFF_TIMER=0
 
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
 }
 
-# Pastikan dijalankan sebagai root
-if [[ $EUID -ne 0 ]]; then
-    log "This script must be run as root"
+if [ "$(id -u)" -ne 0 ]; then
+    log "Script must be run as root."
     exit 1
 fi
 
-# Load konfigurasi, parse option dari file config (format: option name value)
-if [[ -f $CONFIG_FILE ]]; then
-    # Ambil baris option, ubah ke var=value lalu source
-    source <(grep -E "^\s*option" "$CONFIG_FILE" | sed -E 's/option ([^ ]+) (.+)/\1=\2/')
-else
-    log "Config file $CONFIG_FILE not found. Exiting."
-    exit 1
-fi
+LAN_OFF_DURATION=$(uci get hilink.settings.lan_off_duration 2>/dev/null)
+LAN_OFF_DURATION=${LAN_OFF_DURATION:-5}
 
-LAN_OFF_DURATION=${lan_off_duration:-5}
-MODEM_PATH=${modem_path}
-CHECK_INTERVAL=$DEFAULT_CHECK_INTERVAL
-
-loop() {
-    log "Monitoring LAN status..."
-    lan_off_timer=0
-    while true; do
-        if curl -I --connect-timeout 3 -s http://connectivitycheck.gstatic.com/generate_204 >/dev/null 2>&1; then
-            if ((lan_off_timer > 0)); then
-                log "Internet kembali normal."
-            fi
-            lan_off_timer=0
-        else
-            ((lan_off_timer += CHECK_INTERVAL))
-            log "Internet tidak terdeteksi. Timer: $lan_off_timer detik."
-        fi
-
-        if ((lan_off_timer >= LAN_OFF_DURATION)); then
-            log "LAN off selama $LAN_OFF_DURATION detik, IP Modem akan berganti ..."
-            hilink iphunter &>>"$LOG_FILE"
-            lan_off_timer=0
-        fi
-
-        sleep "$CHECK_INTERVAL"
-    done
-}
-
-start() {
-    log "Starting ${SERVICE_NAME} service ..."
-    screen -AmdS hilink-monitor "$0" -l
-}
-
-stop() {
-    log "Stopping ${SERVICE_NAME} service ..."
-    local pid
-    pid=$(screen -list | grep hilink-monitor | awk -F '[.]' '{print $1}')
-    if [[ -n $pid ]]; then
-        kill "$pid" 2>/dev/null || log "Failed to stop service"
+while true; do
+    if curl -I --connect-timeout 3 -s http://connectivitycheck.gstatic.com/generate_204 >/dev/null 2>&1; then
+        LAN_OFF_TIMER=0
     else
-        log "Service not running"
+        LAN_OFF_TIMER=$((LAN_OFF_TIMER + DEFAULT_CHECK_INTERVAL))
+        log "Tidak ada koneksi. Timer: $LAN_OFF_TIMER detik."
     fi
-}
 
-usage() {
-    cat <<EOF
-Usage:
-  -r  Run ${SERVICE_NAME} service
-  -s  Stop ${SERVICE_NAME} service
-EOF
-}
+    if [ "$LAN_OFF_TIMER" -ge "$LAN_OFF_DURATION" ]; then
+        log "Tidak ada koneksi $LAN_OFF_DURATION detik. Menjalankan hilink iphunter..."
+        until hilink iphunter 2>&1 | sed 's/\x1B\[[0-9;]*[a-zA-Z]//g' >> "$LOG_FILE"; do
+            log "hilink iphunter gagal dijalankan, coba lagi dalam 5 detik..."
+            sleep 5
+        done
+        LAN_OFF_TIMER=0
+    fi
 
-case "$1" in
--l) loop ;;
--r) start ;;
--s) stop ;;
-*) usage ;;
-esac
+    sleep "$DEFAULT_CHECK_INTERVAL"
+done

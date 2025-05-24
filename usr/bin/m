@@ -13,6 +13,7 @@ W='\e[1;37m' #WHITE
 
 DIR=/usr/bin
 CONFIG=/etc/config
+INIT=/etc/init.d
 MODEL=/usr/lib/lua/luci/model/cbi
 CONTROLLER=/usr/lib/lua/luci/controller
 
@@ -126,11 +127,14 @@ case $opt in
     clear
     echo -e Proses Uninstall Hilink berjalan, mohon ditunggu......
     echo -e
+    $INIT/himon stop
+    $INIT/himon disable
     rm -f $DIR/m
     rm -f $DIR/hilink
     rm -f $DIR/balong-nvtool
     rm -f $CONFIG/hilink
     rm -f $DIR/himon
+    rm -f $INIT/himon
     rm -f $CONTROLLER/hilink.lua
     rm -f $MODEL/hilink.lua
     clear

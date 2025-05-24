@@ -2,6 +2,7 @@
 
 DIR=/usr/bin
 CONFIG=/etc/config
+INIT=/etc/init.d
 MODEL=/usr/lib/lua/luci/model/cbi
 CONTROLLER=/usr/lib/lua/luci/controller
 GITHUB=https://raw.githubusercontent.com/kangzul/HiMon/main
@@ -47,6 +48,7 @@ download_files() {
     download_file "$DIR/himon" "$GITHUB/usr/bin/himon"
     download_file "$DIR/balong-nvtool" "$GITHUB/usr/bin/balong-nvtool"
     download_file "$CONFIG/hilink" "$GITHUB/hilink"
+    download_file "$INIT/himon" "$GITHUB/etc/init.d/himon"
     download_file "$CONTROLLER/hilink.lua" "$GITHUB/controller/hilink.lua"
     download_file "$MODEL/hilink.lua" "$GITHUB/cbi/hilink.lua"
     finish

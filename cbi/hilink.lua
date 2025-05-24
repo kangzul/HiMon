@@ -1,4 +1,5 @@
 local fs = require("nixio.fs")
+local sys = require("luci.sys")
 
 map = Map("hilink", "Hilink Configuration", "Configure Hilink Modem settings.")
 map.description = [[
@@ -40,55 +41,35 @@ service_btn.inputstyle = "apply"
 status_title = section:option(DummyValue, "_status_title", ".", "")
 status_title.rawhtml = true
 
--- Check if the service is running by checking /etc/rc.local
+-- Check service status via init.d
 local function is_service_running()
-    local rc_path = "/etc/rc.local"
-    local script_line = "/usr/bin/himon -r"
-    return fs.readfile(rc_path) and fs.readfile(rc_path):find(script_line, 1, true)
+    return sys.call("/etc/init.d/himon status >/dev/null") == 0
 end
 
 -- Update button text and title based on service status
 local function update_status()
     if is_service_running() then
-        service_btn.inputtitle = "Stop Service" -- Set the button label dynamically
+        service_btn.inputtitle = "Stop Service"
         service_btn.inputstyle = "remove"
         status_title.value = '<span style="color:green;">Service is Running</span>'
     else
-        service_btn.inputtitle = "Start Service" -- Set the button label dynamically
+        service_btn.inputtitle = "Start Service"
         service_btn.inputstyle = "apply"
         status_title.value = '<span style="color:red;">Service is Stopped</span>'
     end
 end
 
--- Initial status update
+-- Initial update
 update_status()
 
--- Function for toggling the service
+-- Button action
 function service_btn.write(self, section)
-    local rc_path = "/etc/rc.local"
-    local script_line = "/usr/bin/himon -r"
-
     if is_service_running() then
-        -- Stop the service
-        luci.sys.call("himon -s >/dev/null 2>&1")
-
-        -- Remove the script from /etc/rc.local
-        local rc_content = fs.readfile(rc_path)
-        if rc_content then
-            local new_content = rc_content:gsub(script_line:gsub("%-", "%%-") .. "\n?", "")
-            fs.writefile(rc_path, new_content)
-        end
+        sys.call("/etc/init.d/himon stop")
     else
-        -- Start the service
-        luci.sys.call("himon -r >/dev/null 2>&1 &")
-
-        -- Add the script to /etc/rc.local if not already present
-        if not fs.readfile(rc_path):find(script_line, 1, true) then
-            fs.writefile(rc_path, fs.readfile(rc_path):gsub("exit 0", script_line .. "\nexit 0"))
-        end
+        sys.call("/etc/init.d/himon enable")
+        sys.call("/etc/init.d/himon start")
     end
-
-    -- Update the status after the service is toggled
     update_status()
 end
 
