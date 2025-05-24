@@ -57,6 +57,7 @@ local function update_status()
         service_btn.inputstyle = "apply"
         status_title.value = '<span style="color:red;">Service is Stopped</span>'
     end
+    luci.http.redirect(luci.dispatcher.build_url("admin", "services", "hilink"))
 end
 
 -- Initial update
